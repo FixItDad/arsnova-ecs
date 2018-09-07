@@ -1,0 +1,38 @@
+# Tasks to upload docker images to AWS ECS repos
+# These tasks require root privileges to access Docker.
+#
+# Input is name:version of an image in the local Docker repository
+# These tasks might be called with a snippet similar to the following.
+#  - include_tasks: uploadimages.yml
+#    with_items: 
+#    - arsnova/arsnova-nginx:2.6
+#    - arsnova/arsnova-webapp:2.6
+#
+# In order to push images to AWS, Docker needs AWS credentials. This can be 
+# accomplished with the following task (assuming your aws command is set up
+# appropriately.
+#  - name: Get AWS ECS login credentials for Docker
+#    shell: "$(aws ecr get-login --region {{ aws_region }})"
+
+- name: Get reponame
+  set_fact: 
+    reponame: "{{ item| regex_replace(':.*' | trim) }}"
+    version:  "{{ item| regex_replace('.*:' | trim) }}"
+
+- name: Create container repo (ECR) "{{ reponame }}"
+  ecs_ecr:
+    region: "{{ aws_region }}"
+    name:  "{{ reponame }}"
+  register: ecr
+
+# The target tag is changed / set on the repository value
+- name: docker set tag for remote repo
+  docker_image:
+    name: "{{ item }}"
+    repository: "{{ecr.repository.repositoryUri}}:latest"
+
+- name: docker push
+  docker_image:
+    name: "{{ecr.repository.repositoryUri}}:latest"
+    tag: "{{ reponame }}:latest"
+    push: yes

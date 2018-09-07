@@ -1,0 +1,46 @@
+
+
+# AWS Account ID
+aws_account_id: 123456789
+
+# The target AWS region
+aws_region: us-east-2
+
+# ARN partition. You may need to update this if you are not using commercial AWS in the US
+arn_partition: aws
+
+# AWS key name to allow SSH access to ECS Docker container instances
+ssh_key_name: keyname
+
+# Domain of the service
+app_domain: arsnova.example.com
+
+# Application name. This will be used as a base string for tags and resource names
+app_name: arsnova
+
+
+# VPC setup
+
+# The CIDR block used by the VPC
+vpc_cidr_block: 10.101.0.0/24
+
+# Routes for the VPC -  Routes are specified as dicts
+# containing the keys 'dest' and one of 'gateway_id', 'instance_id',
+# 'network_interface_id', or 'vpc_peering_connection_id'. If
+# 'gateway_id' is specified, you can refer to the VPC's IGW by using
+# the value 'igw'.
+vpc_routes: 
+- name: public
+  subnets:
+  - 10.101.0.0/24
+  routes:
+    - dest: 0.0.0.0/0
+      gateway_id: "igw"
+
+ecs_containers:
+- name_suffix: container1
+  ip: 10.101.0.10
+
+  
+# Allow SSH access from these IP blocks
+ssh_cidr_list: [ "192.168.1.5/32", "10.0.0.8/30" ]

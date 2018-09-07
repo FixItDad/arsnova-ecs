@@ -1,0 +1,6 @@
+[all]
+localhost
+
+
+[all:vars]
+ansible_become_password = {{ lookup("env", "APV1") | b64decode }}

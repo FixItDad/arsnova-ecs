@@ -1,0 +1,155 @@
+---
+# Removes the AWS Docker VPC infrastructure
+
+
+- hosts: localhost
+  tasks:
+  - name: get Configuration
+    include_vars: file=config.yml name=config
+  - debug: var=config
+
+#  - name: Stop ECS task
+#    ecs_task:
+#      operation: stop
+#      region: "{{ config.aws_region }}"
+#      cluster: "{{ config.app_name }}-ecs"
+#      task: 
+
+  - name: Stop ECS cluster instances
+    ec2_instance:
+      state: stopped
+      region: "{{ config.aws_region }}"
+      filters:
+        "tag:Name": "{{config.app_name}}-{{item.name_suffix}}"
+    with_items: "{{ config.ecs_containers }}"
+    ignore_errors: yes
+
+  - name: Remove ECS cluster instances
+    ec2_instance:
+      state: absent
+      region: "{{ config.aws_region }}"
+      filters:
+        "tag:Name": "{{config.app_name}}-{{item.name_suffix}}"
+    with_items: "{{ config.ecs_containers }}"
+    ignore_errors: yes
+
+
+  - name: ECS Service to zero instances
+    ecs_service:
+      state: present
+      name: "{{config.app_name}}-service"
+      region: "{{ config.aws_region }}"
+      cluster: "{{ config.app_name }}-ecs"
+      desired_count: 0
+      task_definition: "{{config.app_name}}-task"
+    ignore_errors: yes
+
+  - name: Remove ECS Service
+    ecs_service:
+      state: absent
+      name: "{{config.app_name}}-service"
+      region: "{{ config.aws_region }}"
+      cluster: "{{ config.app_name }}-ecs"
+    ignore_errors: yes
+
+  - name: Remove container image repository (ECR)
+    ecs_ecr:
+      state: absent
+      region: "{{ config.aws_region }}"
+      name:  "{{ config.app_name }}-ecr"
+    ignore_errors: yes
+
+  - name: Remove ECS cluster
+    ecs_cluster:
+      state: absent
+      region: "{{ config.aws_region }}"
+      name: "{{ config.app_name }}-ecs"
+    register: ecs_cluster
+    ignore_errors: yes
+
+  - name: Set up security group
+    ec2_group:
+      state: absent
+      name: "{{ config.app_name }}-sg"
+      region: "{{ config.aws_region }}"
+    ignore_errors: yes
+
+  - name: Get VPC Details
+    ec2_vpc_net_facts:
+      filters:
+        "tag:Name": "{{ config.app_name }}-vpc"
+    register: vpc
+  - debug: var=vpc
+
+    # Skip this section if the VPC doesn't exist
+  - block:
+    - name: Extract VPC ID
+      set_fact: vpc_id="{{ vpc.vpcs[0].id }}"
+
+    - name: Remove Internet gateway
+      ec2_vpc_igw:
+        state: absent
+        region: "{{ config.aws_region }}"
+        vpc_id: "{{ vpc_id }}"
+
+    - name: Get VPC Route Table Details
+      ec2_vpc_route_table_facts:
+        region: "{{ config.aws_region }}"
+        filters:
+          "tag:Name": "{{ config.app_name }}-rt"
+      register: vpc_rt
+
+    - name: Remove VPC routes
+      ec2_vpc_route_table:
+        state: absent
+        region: "{{ config.aws_region }}"
+        vpc_id: "{{ vpc_id }}"
+        lookup: id
+        route_table_id: "{{item.id}}"
+      with_items: "{{ vpc_rt.route_tables }}"
+
+#    - name: Get security groups for the VPC
+#      ec2_group_facts:
+#        filters:
+#          vpc_id: "{{vpc_id}}"
+#      register: vpc_sgs
+#    - debug: var=vpc_sgs
+#
+#    - name: Remove security groups
+#      ec2_group:
+#        state: absent
+#        group_id: "{{item}}.group_id"
+#      with_items: vpc_sgs.security_groups
+
+    - name: Remove subnet
+      ec2_vpc_subnet:
+        state: absent
+        vpc_id: "{{ vpc_id }}"
+        cidr: "{{ config.vpc_cidr_block }}"
+
+    - name: Get network ACLs for the VPC
+      ec2_vpc_nacl_facts:
+        filters:
+          vpc-id: "{{vpc_id}}"
+      register: vpc_nacls
+    - debug: var=vpc_nacls
+
+    - name: Remove network ACLs
+      ec2_vpc_nacl:
+        state: absent
+        nacl_id: "{{item}}.nacl_id"
+      with_items: vpc_nacls.nacls
+
+    - name: Remove the VPC
+      ec2_vpc_net:
+        state: absent
+        region: "{{ config.aws_region }}"
+        name: "{{ config.app_name }}-vpc"
+        cidr_block: "{{ config.vpc_cidr_block }}"
+    when: "vpc.vpcs[0] is defined"
+
+  - name: Remove ECS role
+    iam_role: 
+      name: "{{config.app_name}}" 
+      state: absent
+

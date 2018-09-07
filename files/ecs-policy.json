@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Stmt1535393628245",
+      "Action": "ecs:*",
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ]
+}
