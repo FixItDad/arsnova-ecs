@@ -107,8 +107,6 @@
   - name: Get AWS ECS login credentials for Docker
     become: true
     shell: "$(aws ecr get-login --region {{ config.aws_region }})"
-#    when: false
-# TODO remove this ^^
 
   # Upload arsnova images to ECS image repositories
   - include_tasks: uploadimages.yml
