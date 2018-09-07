@@ -29,4 +29,4 @@ Copy the example-config.yml file to config.yml and edit it for your configuratio
 
 Once configured, you should be able to run `ansible-playbook aws-docker-vpc.yml -b` to install in AWS. This creates a VPC with external access for anyone to HTTP on port 80 and SSH access from the addresses you specify in the config.yml file. One EC2 container instance (t2.small) is created to host the application containers. It may be possible to downsize this to a micro, but I need to take a look at resource usage for proper sizing.
 
-Use `ansible-playbook rm-aws-docker-vpc.yml -b` to uninstall. **WARNING:** The Ansible ECS modules do not seem to porperly deregister the container instances so the ECS cluster deletion does not work. You will have to manually deregister instances and remove the cluster (From the AWS ECS Clusters page).
+Use `ansible-playbook rm-aws-docker-vpc.yml -b` to uninstall. **WARNING:** The Ansible ECS modules do not seem to properly deregister the container instances so the ECS cluster deletion does not work. You will have to manually deregister instances and remove the cluster (From the AWS ECS Clusters page).
