@@ -1,0 +1,195 @@
+#-*- mode: yaml -*-
+
+# Provision or decommision a simple VPC in Amazon AWS. The VPC has an Internet gateway 
+# with a single subnet and allows SSH access from user specified IP CIDR ranges.
+#
+# The following variables can be defined to customize the VPC during provisioning:
+#   prefix: Prefix for AWS names. Usually the name of the application. Default="myapp"
+#   aws_region: Target AWS region Default="us-east-2"
+#   ssh_cidr_list: List of CIDRs to allow SSH access. Default: NO SSH access. 
+#   vpc_cidr_block: IP address range for your VPC subnet. Default="10.101.0.0/24"
+#   vpc_state: Must not be equal to "absent" for provisioning.
+#   vpc_routes: List of routes for ec2_vpc_route_table module.
+#      Default= route anything non-local to the Internet gateway
+#
+# The following complex variable is returned for referencing VPC components:
+# aws_vpc:
+#   vpc: ec2_vpc result.vpc 
+#   subnet: ec2_vpc_subnet result.subnet
+#   gateway_id: ec2_vpc_igw result.gateway_id
+#   route_table: ec2_vpc_route_table result
+#   security_group: ec2_group result
+#   
+# This role could be included as in the following example:
+#
+#  - include_role:
+#      name: aws-vpc
+#    vars:
+#      prefix: "{{ config.app_name }}"
+#      aws_region: "{{config.aws_region}}"
+#      vpc_cidr_block: "{{ config.vpc_cidr_block }}"
+#      vpc_routes: "{{ config.vpc_routes }}"
+#      ssh_cidr_list: "{{ config.ssh_cidr_list }}"
+
+# The variables prefix, aws_region, and vpc_cidr_block are needed for decommisioning. The
+# vpc_state variable MUST be set to "absent".
+# This role can be called as follows for decommisioning.
+#  - name: Remove VPC
+#    include_role:
+#      name: aws-vpc
+#    vars:
+#      vpc_state: absent
+#      prefix: "arsnova"
+#      aws_region: "{{config.aws_region}}"
+#      vpc_cidr_block: "{{ config.vpc_cidr_block }}"
+
+
+# Provisioning block
+- block:
+  - name: Provision the VPC
+    ec2_vpc_net:
+      state: "present"
+      region: "{{ aws_region }}"
+      name: "{{ prefix }}-vpc"
+      cidr_block: "{{ vpc_cidr_block }}"
+    register: tmp_vpc
+
+  - name: Provision a subnet
+    ec2_vpc_subnet:
+      state: present
+      region: "{{ aws_region }}"
+      cidr: "{{ vpc_cidr_block }}"
+      map_public: no
+      vpc_id: "{{tmp_vpc.vpc.id}}"
+    register: tmp_subnet
+
+  - name: Provision an Internet gateway
+    ec2_vpc_igw:
+      state: "present"
+      region: "{{ aws_region }}"
+      vpc_id: "{{ tmp_vpc.vpc.id }}"
+      tags: "{ 'Name': '{{ prefix }}-igw' }"
+    register: tmp_igw
+
+  - name: Set up VPC route table
+    ec2_vpc_route_table:
+      state: "present"
+      region: "{{ aws_region }}"
+      vpc_id: "{{ tmp_vpc.vpc.id }}"
+      tags: "{ 'Name': '{{ prefix }}-rt' }"
+      subnets: "{{ item.subnets }}"
+      routes: "{{ item.routes }}"
+    with_items: "{{ vpc_routes }}"
+    register: tmp_rt
+
+  - name: "Security group: Create temporary SSH CIDR list"
+    set_fact:
+      tmp_entry:
+        proto: tcp
+        ports:
+        - 22
+        cidr_ip: "{{item}}"
+    with_items: "{{ssh_cidr_list}}"
+    register: tmp_aws_vpc
+    when: "ssh_cidr_list is defined"
+
+  - name: Set up security group for management via SSH
+    ec2_group:
+      state: present
+      name: "{{ prefix }}-sg-mgmt"
+      region: "{{ aws_region }}"
+      vpc_id: "{{ tmp_vpc.vpc.id }}"
+      description: "Security group for {{ prefix }}."
+      rules: "{{ tmp_aws_vpc.results | map(attribute='ansible_facts.tmp_entry') |list }}"
+    when: "ssh_cidr_list is defined"
+    register: tmp_sg
+
+  - name: Return VPC information
+    set_fact: 
+      aws_vpc:
+        vpc: "{{tmp_vpc.vpc}}"
+        subnet: "{{tmp_subnet.subnet}}"
+        gateway_id: "{{tmp_igw.gateway_id}}"
+        route_table: "{{tmp_rt}}"
+        security_group: "{{tmp_sg}}"
+
+  when: vpc_state != "absent"
+
+
+# Decommisioning block
+- block:
+  - name: Get VPC Details if it exists
+    ec2_vpc_net_facts:
+      filters:
+        "tag:Name": "{{ prefix }}-vpc"
+    register: tmp_vpc
+
+
+    # Skip this section if the VPC doesn't exist
+  - block:
+    - name: Extract VPC ID
+      set_fact: vpc_id="{{ tmp_vpc.vpcs[0].id }}"
+
+    - name: Get security groups
+      ec2_group_facts:
+        filters:
+          vpc-id: "{{vpc_id}}"
+      register: tmp_sgs
+
+    - name: "Remove security group {{ item.group_name }}"
+      ec2_group:
+        state: absent
+        group_id: "{{ item.group_id }}"
+        region: "{{ aws_region }}"
+      with_items: "{{ tmp_sgs.security_groups }}"
+      when: "item.group_name != 'default'"
+
+    - name: Remove Internet gateway
+      ec2_vpc_igw:
+        state: absent
+        region: "{{ aws_region }}"
+        vpc_id: "{{ vpc_id }}"
+
+    - name: Get VPC Route Table Details
+      ec2_vpc_route_table_facts:
+        region: "{{ aws_region }}"
+        filters:
+          "tag:Name": "{{ prefix }}-rt"
+      register: tmp_vpc_rt
+
+    - name: Remove VPC routes
+      ec2_vpc_route_table:
+        state: absent
+        region: "{{ aws_region }}"
+        vpc_id: "{{ vpc_id }}"
+        lookup: id
+        route_table_id: "{{item.id}}"
+      with_items: "{{ tmp_vpc_rt.route_tables }}"
+
+    - name: Remove subnet
+      ec2_vpc_subnet:
+        state: absent
+        vpc_id: "{{ vpc_id }}"
+        cidr: "{{ vpc_cidr_block }}"
+
+    - name: Get network ACLs for the VPC
+      ec2_vpc_nacl_facts:
+        filters:
+          vpc-id: "{{vpc_id}}"
+      register: vpc_nacls
+
+    - name: Remove network ACLs
+      ec2_vpc_nacl:
+        state: absent
+        nacl_id: "{{item}}.nacl_id"
+      with_items: vpc_nacls.nacls
+
+    - name: Remove the VPC
+      ec2_vpc_net:
+        state: absent
+        region: "{{ aws_region }}"
+        name: "{{ prefix }}-vpc"
+        cidr_block: "{{ vpc_cidr_block }}"
+    when: "tmp_vpc.vpcs[0] is defined"
+
+  when: vpc_state == "absent"

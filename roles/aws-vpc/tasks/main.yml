@@ -1,0 +1,3 @@
+---
+- include: ../aws-vpc.tasks
+  tags: aws-vpc
