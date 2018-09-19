@@ -6,6 +6,8 @@ This initial version contains basic setup and teardown Ansible playbooks. There 
 
 AWS documentation on permissions needed for ECS containers seems to be incomplete and I ended up adding full EC2 and ECS permissions to the role for the container. I'd like to pare this down in the future.
 
+Regarding the role file layout. To avoid having so many "main.yml" files open in my editor at once, I've been using imports and symlinks to reference files in the main role directory. This seems clearer to me than the standard subdirecotry layout for small roles and it remains compartible with the standard layout.
+
 ## Instructions
 You will need:
 * local Docker install
