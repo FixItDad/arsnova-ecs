@@ -6,7 +6,7 @@ This initial version contains basic setup and teardown Ansible playbooks. There 
 
 AWS documentation on permissions needed for ECS containers seems to be incomplete and I ended up adding full EC2 and ECS permissions to the role for the container. I'd like to pare this down in the future.
 
-Regarding the role file layout. To avoid having so many "main.yml" files open in my editor at once, I've been using imports and symlinks to reference files in the main role directory. This seems clearer to me than the standard subdirecotry layout for small roles and it remains compartible with the standard layout.
+Regarding the role file layout. To avoid having so many "main.yml" files open in my editor at once, I've been symlinks in the main role directory to reference files. This seems clearer to me than the standard subdirectory layout for small roles and it remains compatible with the standard layout.
 
 ## Instructions
 You will need:
@@ -15,9 +15,9 @@ You will need:
 * recent version of ansible (tested with 2.5.2)
 
 
-Follow the instructions from [Docker version of ARSnova](https://github/thm-projects/arsnova-docker) to generate the Docker images that will be uploaded to AWS. I had an older version of Docker and ended up downgrading the docker-compose.yml file to version "2.0" from "3.4" and removing the volumes > data > name value to work in my installation. you should end up with 3 docker images (arsnova/arsnova-couchdb, arsnova/arsnova-webapp, arsnova/arsnova-nginx)
+Follow the instructions from [Docker version of ARSnova](https://github.com/thm-projects/arsnova-docker) to generate the Docker images that will be uploaded to AWS. I had an older version of Docker and ended up downgrading the docker-compose.yml file to version "2.0" from "3.4" and removing the volumes > data > name value to work in my installation. you should end up with 3 docker images (arsnova/arsnova-couchdb, arsnova/arsnova-webapp, arsnova/arsnova-nginx)
 
-I stash my Ansible become (sudo) password in an evironment variable so I don't have to constantly re-enter it. If you don't want to do this, remove/comment the **ansible_become_password** line in **hosts**. Otherwise, use the following bash shell function to setup up the env variable.
+I stash my Ansible become (sudo) password in an environment variable so I don't have to constantly re-enter it. If you don't want to do this, remove/comment the **ansible_become_password** line in **hosts**. Otherwise, use the following bash shell function to setup up the env variable.
 ```
 function ansiblepw {
   echo -n "become(sudo): "
