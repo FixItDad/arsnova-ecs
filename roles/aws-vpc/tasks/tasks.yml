@@ -1,5 +1,4 @@
-#-*- mode: yaml -*-
-
+---
 # Provision or decommision a simple VPC in Amazon AWS. The VPC has an Internet gateway 
 # with a single subnet and allows SSH access from user specified IP CIDR ranges.
 #

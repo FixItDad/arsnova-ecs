@@ -1,1 +1,19 @@
-../aws-vpc.defaults
+---
+# Default values for VPC creation
+
+vpc_state: present
+prefix: "myapp"
+aws_region: "us-east-2"
+arn_partition: "aws"
+vpc_cidr_block: "10.101.0.0/24"
+vpc_routes:
+- name: public
+  subnets:
+  - 10.101.0.0/24
+  routes:
+    - dest: 0.0.0.0/0
+      gateway_id: "igw"
+
+# No default for ssh_cidr_list. This MUST be specified by the user for SSH access
+
+
